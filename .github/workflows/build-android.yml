@@ -20,16 +20,27 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y openjdk-17-jdk gradle
+          sudo apt-get install -y openjdk-17-jdk wget unzip gradle
           npm install -g cordova@12
+
+      - name: Install Android SDK
+        run: |
+          wget https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O sdk.zip
+          mkdir -p $HOME/android-sdk/cmdline-tools
+          unzip -q sdk.zip -d $HOME/android-sdk/cmdline-tools
+          mv $HOME/android-sdk/cmdline-tools/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+
+      - name: Set environment variables
+        run: |
+          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "PATH=$HOME/android-sdk/platform-tools:$PATH" >> $GITHUB_ENV
 
       - name: Add Android platform
         run: |
           cordova platform add android
           cordova prepare android
-
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses || true
 
       - name: Build APK
         run: cordova build android --release --verbose
@@ -44,4 +55,3 @@ jobs:
           name: NoaApp-release
           path: platforms/android/app/build/outputs/**/*.apk
           if-no-files-found: warn
-
