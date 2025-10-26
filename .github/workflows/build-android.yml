@@ -26,10 +26,15 @@ jobs:
           cordova prepare android
 
       - name: Build APK
-        run: cordova build android --release
+        run: cordova build android --release --verbose
+
+      - name: List outputs
+        if: always()
+        run: ls -lR platforms/android/app/build/outputs
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: NoaApp-release
-          path: platforms/android/app/build/outputs/apk/release/*.apk
+          path: platforms/android/app/build/outputs/**/*.apk
+          if-no-files-found: warn
