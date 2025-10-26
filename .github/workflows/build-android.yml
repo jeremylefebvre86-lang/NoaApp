@@ -1,8 +1,9 @@
+
 name: Build Android APK
 
 on:
   push:
-    branches: [ "maître" ]
+    branches: [ "master" ]
 
 jobs:
   build:
