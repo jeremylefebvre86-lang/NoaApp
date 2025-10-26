@@ -1,4 +1,4 @@
-mname: Build Android APK
+name: Build Android APK
 
 on:
   push:
@@ -44,43 +44,4 @@ jobs:
           name: NoaApp-release
           path: platforms/android/app/build/outputs/**/*.apk
           if-no-files-found: warn
-name: Build Android APK
 
-on:
-  push:
-    branches: [ "master" ]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Cordova
-        run: npm install -g cordova@12
-
-      - name: Add Android platform
-        run: |
-          cordova platform add android
-          cordova prepare android
-
-      - name: Build APK
-        run: cordova build android --release --verbose
-
-      - name: List outputs
-        if: always()
-        run: ls -lR platforms/android/app/build/outputs
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: NoaApp-release
-          path: platforms/android/app/build/outputs/**/*.apk
-          if-no-files-found: warn
