@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="format-detection" content="telephone=no">
+    <title>Noä</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #000;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            height: 100vh;
+        }
+
+        /* Vidéo plein écran */
+        #noaVideo {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            z-index: 1;
+        }
+
+        /* Overlay sombre pour meilleur contraste */
+        #overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.3) 70%, rgba(0,0,0,0.8) 100%);
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* Zone de réponse */
+        #responses {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 80px;
+            text-align: center;
+            color: #e5e7eb;
+            font-size: 18px;
+            padding: 16px 24px;
+            z-index: 3;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+            line-height: 1.4;
+        }
+
+        /* Barre de chat en bas */
+        .chat {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            background: rgba(0,0,0,0.75);
+            backdrop-filter: blur(20px);
+            padding: 12px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            z-index: 4;
+        }
+
+        #userInput {
+            flex: 1;
+            padding: 14px 20px;
+            border: none;
+            border-radius: 24px;
+            background: rgba(31, 41, 55, 0.9);
+            color: #fff;
+            outline: none;
+            font-size: 16px;
+            transition: background 0.2s;
+        }
+
+        #userInput:focus {
+            background: rgba(31, 41, 55, 1);
+        }
+
+        #userInput::placeholder {
+            color: rgba(229, 231, 235, 0.5);
+        }
+
+        button {
+            width: 50px;
+            height: 50px;
+            border: none;
+            border-radius: 50%;
+            color: #fff;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        button:active {
+            transform: scale(0.92);
+        }
+
+        #mic {
+            background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        }
+
+        #mic.listening {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            animation: pulse-mic 1s ease-in-out infinite;
+        }
+
+        @keyframes pulse-mic {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            50% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+        }
+
+        /* Indicateur de chargement vidéo */
+        #loading {
+            position: absolute;
+            inset: 0;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            transition: opacity 0.5s;
+        }
+
+        #loading.hide {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255,255,255,0.1);
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <div class="spinner"></div>
+    </div>
+
+    <video id="noaVideo" autoplay loop muted playsinline></video>
+    <div id="overlay"></div>
+    
+    <div id="responses"></div>
+    
+    <div class="chat">
+        <input id="userInput" placeholder="Parle à Noä..." autocomplete="off">
+        <button id="mic">🎙️</button>
+        <button id="send">➤</button>
+    </div>
+
+    <script type="text/javascript" src="cordova.js"></script>
+    <script>
+        // Éléments DOM
+        const video = document.getElementById('noaVideo');
+        const mic = document.getElementById('mic');
+        const send = document.getElementById('send');
+        const input = document.getElementById('userInput');
+        const responses = document.getElementById('responses');
+        const loading = document.getElementById('loading');
+
+        // État
+        let isTalking = false;
+        let isListening = false;
+        let talkingTimeout = null;
+
+        // Chemins vidéo
+        const VIDEO_IDLE = 'assets/noa_attente_v2.mp4';
+        const VIDEO_TALK = 'assets/noa_parle_v2.mp4';
+
+        // Changer vidéo vers mode attente
+        function switchToIdle() {
+            if (video.src.includes('noa_attente')) return;
+            video.src = VIDEO_IDLE;
+            video.loop = true;
+            video.muted = true;
+            video.play().catch(e => console.log('Play idle error:', e));
+        }
+
+        // Changer vidéo vers mode parole
+        function switchToTalk() {
+            if (video.src.includes('noa_parle')) return;
+            video.src = VIDEO_TALK;
+            video.loop = false;
+            video.muted = true;
+            video.currentTime = 0;
+            video.play().catch(e => console.log('Play talk error:', e));
+        }
+
+        // Synthèse vocale
+        function speak(text) {
+            // Cordova TTS plugin
+            if (window.TTS) {
+                TTS.speak({
+                    text: text,
+                    locale: 'fr-FR',
+                    rate: 1.0
+                }, () => {}, () => {});
+                return;
+            }
+
+            // Web Speech API fallback
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'fr-FR';
+                utterance.rate = 1.0;
+                speechSynthesis.speak(utterance);
+            }
+        }
+
+        // Afficher et dire le texte
+        function displayAndSpeak(text) {
+            responses.textContent = text;
+            speak(text);
+        }
+
+        // Générer réponse
+        function generateReply(message) {
+            const msg = message.toLowerCase().trim();
+            
+            // Salutations
+            if (msg.includes('bonjour') || msg.includes('salut') || msg.includes('hey')) {
+                return 'Bonjour ! Je suis ravie de te parler.';
+            }
+            
+            // État
+            if (msg.includes('comment') && (msg.includes('va') || msg.includes('ça va'))) {
+                return 'Je vais très bien, merci de demander. Et toi ?';
+            }
+            
+            // Identité
+            if (msg.includes('qui es-tu') || msg.includes('qui es tu') || msg.includes('ton nom')) {
+                return 'Je suis Noä, ton assistante personnelle.';
+            }
+            
+            // Merci
+            if (msg.includes('merci') || msg.includes('thank')) {
+                return 'Avec plaisir, toujours pour toi.';
+            }
+            
+            // Au revoir
+            if (msg.includes('au revoir') || msg.includes('bye') || msg.includes('à plus')) {
+                return 'À bientôt ! Prends soin de toi.';
+            }
+            
+            // Capacités
+            if (msg.includes('que peux-tu faire') || msg.includes('tes capacités')) {
+                return 'Je peux discuter avec toi, répondre à tes questions et t\'écouter.';
+            }
+            
+            // Blague
+            if (msg.includes('blague') || msg.includes('rigole')) {
+                const blagues = [
+                    'Pourquoi les plongeurs plongent toujours en arrière ? Parce que sinon ils tombent dans le bateau !',
+                    'Qu\'est-ce qu\'un crocodile qui surveille une pharmacie ? Un Lacoste garde.',
+                    'Pourquoi les poissons n\'aiment pas jouer au tennis ? Parce qu\'ils ont peur du filet.'
+                ];
+                return blagues[Math.floor(Math.random() * blagues.length)];
+            }
+            
+            // Réponse par défaut
+            return 'Je t\'écoute, dis-moi tout.';
+        }
+
+        // Traiter message utilisateur
+        function handleUserMessage(text) {
+            if (!text || !text.trim()) return;
+            
+            const cleanText = text.trim();
+            const reply = generateReply(cleanText);
+            
+            // Passer en mode parole
+            switchToTalk();
+            isTalking = true;
+            
+            // Afficher et parler
+            displayAndSpeak(reply);
+            
+            // Calculer durée (min 2s, ~50ms par caractère)
+            const duration = Math.max(2000, reply.length * 50);
+            
+            // Retour en mode attente après la réponse
+            if (talkingTimeout) clearTimeout(talkingTimeout);
+            talkingTimeout = setTimeout(() => {
+                isTalking = false;
+                if (!isListening) {
+                    switchToIdle();
+                }
+            }, duration);
+        }
+
+        // Bouton envoyer
+        send.addEventListener('click', () => {
+            const text = input.value;
+            input.value = '';
+            if (text.trim()) {
+                handleUserMessage(text);
+            }
+        });
+
+        // Entrée clavier
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const text = input.value;
+                input.value = '';
+                if (text.trim()) {
+                    handleUserMessage(text);
+                }
+            }
+        });
+
+        // Reconnaissance vocale
+        mic.addEventListener('click', () => {
+            // Cordova plugin
+            if (window.plugins && window.plugins.speechRecognition) {
+                window.plugins.speechRecognition.hasPermission((hasPermission) => {
+                    const startRecognition = () => {
+                        isListening = true;
+                        mic.classList.add('listening');
+                        responses.textContent = 'Je t\'écoute...';
+                        
+                        window.plugins.speechRecognition.startListening(
+                            (results) => {
+                                isListening = false;
+                                mic.classList.remove('listening');
+                                if (results && results[0]) {
+                                    handleUserMessage(results[0]);
+                                }
+                            },
+                            (error) => {
+                                isListening = false;
+                                mic.classList.remove('listening');
+                                console.error('Recognition error:', error);
+                                responses.textContent = 'Erreur micro, réessaye.';
+                            },
+                            { language: 'fr-FR', showPopup: false }
+                        );
+                    };
+                    
+                    if (!hasPermission) {
+                        window.plugins.speechRecognition.requestPermission(
+                            () => startRecognition(),
+                            () => {
+                                alert('Permission micro requise');
+                            }
+                        );
+                    } else {
+                        startRecognition();
+                    }
+                });
+                return;
+            }
+            
+            // Web Speech API fallback
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                alert('Micro non disponible sur ce navigateur');
+                return;
+            }
+            
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'fr-FR';
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            
+            recognition.onstart = () => {
+                isListening = true;
+                mic.classList.add('listening');
+                responses.textContent = 'Je t\'écoute...';
+            };
+            
+            recognition.onresult = (event) => {
+                if (event.results && event.results[0] && event.results[0][0]) {
+                    handleUserMessage(event.results[0][0].transcript);
+                }
+            };
+            
+            recognition.onend = () => {
+                isListening = false;
+                mic.classList.remove('listening');
+                if (!isTalking) {
+                    switchToIdle();
+                }
+            };
+            
+            recognition.onerror = (event) => {
+                console.error('Recognition error:', event.error);
+                isListening = false;
+                mic.classList.remove('listening');
+                responses.textContent = 'Erreur micro, réessaye.';
+            };
+            
+            recognition.start();
+        });
+
+        // Événement Cordova ready
+        document.addEventListener('deviceready', () => {
+            console.log('Cordova ready');
+            
+            // Demander permissions
+            if (cordova.plugins && cordova.plugins.permissions) {
+                const permissions = cordova.plugins.permissions;
+                permissions.requestPermissions(
+                    [permissions.RECORD_AUDIO, permissions.MODIFY_AUDIO_SETTINGS],
+                    (status) => console.log('Permissions:', status),
+                    (error) => console.error('Permission error:', error)
+                );
+            }
+        });
+
+        // Chargement vidéo
+        video.addEventListener('loadeddata', () => {
+            loading.classList.add('hide');
+        });
+
+        video.addEventListener('error', (e) => {
+            console.error('Video error:', e);
+            loading.textContent = 'Erreur chargement vidéo';
+        });
+
+        // Initialisation
+        video.src = VIDEO_IDLE;
+        displayAndSpeak('Bonjour, je suis Noä. Parle ou écris ton message.');
+        
+        console.log('NoaApp initialisée ✨');
+    </script>
+</body>
+</html>
