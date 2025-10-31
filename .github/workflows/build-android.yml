@@ -8,10 +8,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
-
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
 
@@ -20,10 +18,12 @@ jobs:
 
       - name: Android SDK
         uses: android-actions/setup-android@v3
-        with: { api-level: 34, build-tools: '34.0.0' }
-
-      - name: Accept licenses
-        run: yes | sdkmanager --licenses
+        with:
+          packages: |
+            platforms;android-34
+            build-tools;34.0.0
+            platform-tools
+          accept-android-sdk-licenses: true
 
       - name: Install deps
         run: npm ci
@@ -44,15 +44,11 @@ jobs:
           set -o pipefail
           cordova build android --debug --no-telemetry -- --stacktrace --info | tee build.log
 
-      # Toujours uploader les logs même si le build échoue
       - name: Upload build log
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
+        with: { name: build-log, path: build.log }
 
-      # Uploader l'APK si présent, sinon ignorer
       - name: Upload APK
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
