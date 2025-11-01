@@ -29,3 +29,5 @@ node_modules/
 .config/
 .github/*.log
 .github/build-last.log
+
+.config/gh/hosts.yml
