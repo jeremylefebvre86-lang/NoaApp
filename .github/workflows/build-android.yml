@@ -42,16 +42,16 @@ jobs:
           GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx3g"
         run: |
           set -o pipefail
-          cordova build android --debug --no-telemetry -- --stacktrace --info | tee build.log
+          echo "## NOA BUILD $(date -u)" | tee build.log
+          cordova build android --debug --no-telemetry -- --stacktrace --info | tee -a build.log
 
       - name: Locate APK path
         id: locate_apk
         if: ${{ always() }}
         run: |
-          set +e
           APK=$(ls -1 platforms/android/app/build/outputs/apk/debug/app-*.apk 2>/dev/null | head -n1 || true)
-          echo "apk=$APK"
           echo "apk=$APK" >> $GITHUB_OUTPUT
+          echo "APK=$APK"
 
       - name: Upload build log
         if: ${{ always() }}
@@ -59,6 +59,7 @@ jobs:
         with:
           name: build-log
           path: build.log
+          if-no-files-found: error
 
       - name: Upload APK
         if: ${{ always() && steps.locate_apk.outputs.apk != '' }}
@@ -68,11 +69,10 @@ jobs:
           path: ${{ steps.locate_apk.outputs.apk }}
           if-no-files-found: ignore
 
-      - name: Upload marker
+      - name: Upload outputs dir (fallback)
         if: ${{ always() }}
-        run: echo "ok $(date -u)" > artifact.ok
-      - uses: actions/upload-artifact@v4
-        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
         with:
-          name: _marker
-          path: artifact.ok
+          name: outputs-debug
+          path: platforms/android/app/build/outputs
+          if-no-files-found: ignore
