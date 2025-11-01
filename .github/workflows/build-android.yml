@@ -6,6 +6,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -16,13 +18,21 @@ jobs:
         with:
           node-version: '18'
       - run: npm i -g cordova@12
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: cmdline-tools;latest, platform-tools, platforms;android-33, build-tools;33.0.2
+      - name: Android SDK licenses + packages
+        shell: bash
+        run: |
+          set -e
+          SDKMANAGER=""
+          for p in "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "$ANDROID_SDK_ROOT/cmdline-tools/16.0/bin/sdkmanager"; do
+            if [ -x "$p" ]; then SDKMANAGER="$p"; break; fi
+          done
+          if [ -z "$SDKMANAGER" ]; then echo "sdkmanager introuvable"; exit 1; fi
+          yes | "$SDKMANAGER" --licenses
+          yes | "$SDKMANAGER" "platform-tools" "platforms;android-33" "build-tools;33.0.2"
       - run: npm ci --no-audit --no-fund || npm i --no-audit --no-fund
       - run: npx cordova platform remove android || true
       - run: npx cordova platform add android@11
-      - run: npx cordova build android --debug
+      - run: npx cordova build android --debug --no-telemetry
       - uses: actions/upload-artifact@v4
         with:
           name: NoaApp-debug
