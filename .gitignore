@@ -26,3 +26,6 @@ node_modules/
 /platforms/
 
 .config/
+.config/
+.github/*.log
+.github/build-last.log
