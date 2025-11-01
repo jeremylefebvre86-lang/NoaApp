@@ -1,10 +1,8 @@
 name: Build Android APK
-
 on:
   push:
-    branches: [ master ]
+    branches: [ "master", "main" ]
   workflow_dispatch:
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,26 +11,24 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "11"
+          java-version: '11'
       - uses: actions/setup-node@v4
         with:
-          node-version: "18"
-      - name: Install Cordova CLI
-        run: npm i -g cordova@12.0.0
-      - name: Install Android SDK
-        uses: android-actions/setup-android@v3
-      - name: Accept SDK licenses
-        run: yes | sdkmanager --licenses
-      - name: Install project deps
-        run: npm ci || npm i
-      - name: Prepare Android platform
-        run: |
-          npx cordova platform rm android || true
-          npx cordova platform add android@11
-      - name: Build debug APK
-        run: npx cordova build android --no-interactive --debug
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+          node-version: '18'
+      - run: npm i -g cordova@12
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            cmdline-tools;latest
+            platform-tools
+            platforms;android-33
+            build-tools;33.0.2
+      - run: yes | sdkmanager --licenses
+      - run: npm install --no-audit --no-fund
+      - run: npx cordova platform remove android || true
+      - run: npx cordova platform add android@11
+      - run: npx cordova build android --debug
+      - uses: actions/upload-artifact@v4
         with:
           name: NoaApp-debug
           path: platforms/android/app/build/outputs/apk/debug/*.apk
