@@ -8,16 +8,16 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java 11 (Temurin)
+      # Java 17 uniquement pour sdkmanager (cmdline-tools récent)
+      - name: Setup Java 17 (for sdkmanager)
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '11'
+          java-version: '17'
 
       - name: Ensure Android SDK components
         env:
@@ -27,6 +27,13 @@ jobs:
           ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager \
             "platform-tools" "platforms;android-33" "build-tools;33.0.2"
 
+      # Revenir à Java 11 pour Gradle 7.x + cordova-android@11
+      - name: Setup Java 11 (for build)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+
       - name: Install Gradle 7.6.1
         run: |
           curl -L -o gradle-7.6.1-bin.zip https://services.gradle.org/distributions/gradle-7.6.1-bin.zip
@@ -34,10 +41,10 @@ jobs:
           echo "$PWD/gradle-7.6.1/bin" >> $GITHUB_PATH
           gradle -v
 
-      - name: Setup Node 20
+      - name: Setup Node 18 LTS
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '18'
 
       - name: Install project deps
         run: npm install --no-audit --no-fund
