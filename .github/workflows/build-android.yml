@@ -1,11 +1,14 @@
 name: Build Android APK
 on:
   push:
-    branches: ["master","main"]
+    branches: [main, master]
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -16,20 +19,23 @@ jobs:
           distribution: temurin
           java-version: '17'
       - run: npm i -g cordova@12
-      - name: Android SDK 34
-        shell: bash
+      - name: Install Android SDK cmdline-tools and accept licenses
         run: |
-          set -euo pipefail
-          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
-          SDKMANAGER=$(ls -d "$ANDROID_SDK_ROOT"/cmdline-tools/*/bin/sdkmanager | head -n1)
-          yes | "$SDKMANAGER" --licenses
-          yes | "$SDKMANAGER" "cmdline-tools;latest"
-          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --update
-          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-      - run: npm ci --no-audit --no-fund || npm i --no-audit --no-fund
-      - run: npx cordova platform remove android || true
+          set -euxo pipefail
+          mkdir -p "$ANDROID_SDK_ROOT"
+          curl -sSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o cmd.zip
+          unzip -q cmd.zip -d "$ANDROID_SDK_ROOT"
+          mv "$ANDROID_SDK_ROOT/cmdline-tools" "$ANDROID_SDK_ROOT/cmdline-tools-tmp"
+          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+          mv "$ANDROID_SDK_ROOT/cmdline-tools-tmp"/* "$ANDROID_SDK_ROOT/cmdline-tools/latest/"
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" --licenses >/dev/null
+          yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" "platform-tools" "platforms;android-34" "build-tools;34.0.0" >/dev/null
+      - run: npx cordova platform rm android || true
       - run: npx cordova platform add android@14
-      - run: npx cordova build android --debug --no-telemetry
+      - name: Build debug APK
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+        run: npx cordova build android --debug --no-telemetry
       - uses: actions/upload-artifact@v4
         with:
           name: NoaApp-debug
