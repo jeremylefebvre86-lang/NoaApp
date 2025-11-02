@@ -24,7 +24,6 @@ jobs:
       - name: Install Cordova
         run: npm i -g cordova@12
 
-      # Télécharge et installe cmdline-tools sans interaction
       - name: Android cmdline-tools
         shell: bash
         run: |
@@ -36,7 +35,6 @@ jobs:
           mv "$ANDROID_SDK_ROOT/cmdline-tools"/* "$ANDROID_SDK_ROOT/cmdline-tools/latest"/
           rm -rf "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools"
 
-      # Licences pré-acceptées pour éviter tout prompt
       - name: Accept licenses (preseed)
         shell: bash
         run: |
@@ -51,8 +49,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-          "$SDKMANAGER" --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
+            --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Node deps
         run: npm ci --no-audit --no-fund || npm i --no-audit --no-fund
@@ -61,6 +59,9 @@ jobs:
         run: |
           npx cordova platform remove android || true
           npx cordova platform add android@14
+
+      - name: Hint sdk.dir for Gradle
+        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > platforms/android/local.properties || true
 
       - name: Build debug
         run: npx cordova build android --debug --no-telemetry
