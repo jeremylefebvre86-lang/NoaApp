@@ -1,7 +1,6 @@
 name: Build Android APK
 on:
-  push:
-    branches: ["main","master"]
+  push: { branches: ["main","master"] }
   workflow_dispatch:
 
 jobs:
@@ -11,15 +10,10 @@ jobs:
       ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
+        with: { node-version: '20' }
       - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
+        with: { distribution: temurin, java-version: '17' }
 
       - name: Install Cordova
         run: npm i -g cordova@12
@@ -29,41 +23,43 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$ANDROID_SDK_ROOT"
-          curl -L -o /tmp/clt.zip "https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip"
+          curl -L -o /tmp/clt.zip https://dl.google.com/android/repository/commandlinetools-linux-12266719_latest.zip
           unzip -q /tmp/clt.zip -d "$ANDROID_SDK_ROOT"
           mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools/latest"
-          mv "$ANDROID_SDK_ROOT/cmdline-tools"/* "$ANDROID_SDK_ROOT/cmdline-tools/latest"/
-          rm -rf "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools"
+          mv "$ANDROID_SDK_ROOT"/cmdline-tools/* "$ANDROID_SDK_ROOT/cmdline-tools/latest"/ || true
+          rm -rf "$ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools" || true
 
-      - name: Accept licenses (preseed)
+      - name: Preseed licenses
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$ANDROID_SDK_ROOT/licenses"
           printf '%s\n' \
-            '24333f8a63b6825ea9c5514f83c2829b004d1fee' \
-            'd56f5187479451eabf01fb78af6dfcb131a6481e' > "$ANDROID_SDK_ROOT/licenses/android-sdk-license"
-          printf '84831b9409646a918e30573bab4c9c91346d8abd\n' > "$ANDROID_SDK_ROOT/licenses/android-sdk-preview-license"
+            24333f8a63b6825ea9c5514f83c2829b004d1fee \
+            d56f5187479451eabf01fb78af6dfcb131a6481e \
+            84831b9409646a918e30573bab4c9c91346d8abd \
+            d975f751698a77b662f1254ddbeed3901e976f5a \
+            8a1786a23ef2c3f0f9cb0b87c6d77a2fbf9c36d8 > "$ANDROID_SDK_ROOT/licenses/android-sdk-license"
 
-      - name: Install SDK packages
+      - name: Install required SDK packages
         shell: bash
         run: |
           set -euo pipefail
-          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
-            --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_SDK_ROOT" \
+            "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Node deps
+      - name: Install npm deps
         run: npm ci --no-audit --no-fund || npm i --no-audit --no-fund
 
-      - name: Cordova Android 14
+      - name: Add cordova-android
         run: |
           npx cordova platform remove android || true
           npx cordova platform add android@14
 
-      - name: Hint sdk.dir for Gradle
+      - name: Hint sdk.dir
         run: echo "sdk.dir=$ANDROID_SDK_ROOT" > platforms/android/local.properties || true
 
-      - name: Build debug
+      - name: Build debug APK
         run: npx cordova build android --debug --no-telemetry
 
       - uses: actions/upload-artifact@v4
